@@ -4,6 +4,7 @@ import java.io.FileOutputStream;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.riot.RDFFormat;
+import org.apache.jena.riot.RDFLanguages;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,7 +22,8 @@ public class Convert {
 
       try {
         Model model = RDFDataMgr.loadModel(args[0]);
-        RDFDataMgr.write(new FileOutputStream(args[1]),model, RDFFormat.JSONLD_COMPACT_PRETTY);
+        //RDFDataMgr.write(new FileOutputStream(args[1]),model, RDFFormat.JSONLD_COMPACT_PRETTY);
+        RDFDataMgr.write(new FileOutputStream(args[1]),model, RDFLanguages.filenameToLang(args[1],RDFLanguages.JSONLD));
         LOG.info("Done!");
       }
       catch (Exception e) {
