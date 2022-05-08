@@ -1,0 +1,6 @@
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
+@prefix ex: <http://examples.org#>.
+
+ex:jan a ex:Persoon;
+  rdfs:label "Jan";
+.

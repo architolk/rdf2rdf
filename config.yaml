@@ -1,0 +1,12 @@
+title: Example configuration
+version: 1.0
+configStatements:
+  - title: create classes
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      construct {
+        ?type a rdfs:Class
+      }
+      where {
+        ?s a ?type
+      }
