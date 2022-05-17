@@ -4,10 +4,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.io.File;
 import java.io.FileOutputStream;
+import org.apache.jena.query.Dataset;
+import org.apache.jena.query.DatasetFactory;
 import org.apache.jena.query.Query;
-import org.apache.jena.query.QueryFactory;
 import org.apache.jena.query.QueryExecution;
 import org.apache.jena.query.QueryExecutionFactory;
+import org.apache.jena.query.QueryFactory;
+import org.apache.jena.update.UpdateExecution;
+import org.apache.jena.update.UpdateExecutionFactory;
+import org.apache.jena.update.UpdateFactory;
+import org.apache.jena.update.UpdateRequest;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.riot.RDFDataMgr;
@@ -36,7 +42,7 @@ public class Convert {
         try {
           config = mapper.readValue(new File(args[2]), Config.class);
 
-          LOG.info("Configuration: {}, {} statement(s)",config.getTitle(),config.getConfigStatements().size());
+          LOG.info("Configuration: {}, {} constructs(s), {} updates(s)",config.getTitle(),config.getConstructs().size(),config.getUpdates().size());
         }
         catch (Exception e) {
           LOG.error(e.getMessage(),e);
@@ -46,14 +52,25 @@ public class Convert {
 
       try {
         Model outmodel;
-        if ((args.length==3) && (config.getConfigStatements().size()>0)) {
+        if (args.length==3) {
           Model inmodel = RDFDataMgr.loadModel(args[0]);
           outmodel = ModelFactory.createDefaultModel();
-          for (ConfigStatement statement : config.getConfigStatements()) {
-            LOG.info("- execute: {}",statement.getTitle());
-            Query query = QueryFactory.create(statement.getQuery());
+          for (ConfigStatement construct : config.getConstructs()) {
+            LOG.info("- construct: {}",construct.getTitle());
+            Query query = QueryFactory.create(construct.getQuery());
             QueryExecution qe = QueryExecutionFactory.create(query,inmodel);
             qe.execConstruct(outmodel);
+          }
+          Dataset dataset = DatasetFactory.create(outmodel);
+          try {
+            for (ConfigStatement update : config.getUpdates()) {
+              LOG.info("- update: {}",update.getTitle());
+              UpdateRequest request = UpdateFactory.create(update.getQuery());
+              UpdateExecution.dataset(dataset).update(request).execute();
+            }
+            dataset.commit();
+          } finally {
+            dataset.end();
           }
         } else {
           outmodel = RDFDataMgr.loadModel(args[0]);
@@ -66,7 +83,7 @@ public class Convert {
         LOG.error(e.getMessage(),e);
       }
     } else {
-      LOG.info("Usage: archimate2rdf <input.xml> <output.xml> [config.yaml]");
+      LOG.info("Usage: rdf2rdf <input.xml> <output.xml> [config.yaml]");
     }
   }
 }

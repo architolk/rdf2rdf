@@ -1,4 +1,5 @@
-@prefix ex:    <http://examples.org#> .
-@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ex:   <http://examples.org#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
-ex:Persoon  a   rdfs:Class .
+ex:Persoon  a       rdfs:Class ;
+        rdfs:label  "Persoon" .
