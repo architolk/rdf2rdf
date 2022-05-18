@@ -3,7 +3,7 @@
 	<groupId>nl.architolk.rdf2rdf</groupId>
 	<artifactId>rdf2rdf</artifactId>
 	<packaging>jar</packaging>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0.0</version>
 	<name>rdf2rdf</name>
   <properties>
       <java.version>1.8</java.version>
