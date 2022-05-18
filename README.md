@@ -2,7 +2,7 @@
 
 ## Build
 
-Requirements: Java JDK and maven
+Requirements: Java JDK and Maven
 
 ```
 mvn clean package
