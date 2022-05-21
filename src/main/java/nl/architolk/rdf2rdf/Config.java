@@ -5,8 +5,7 @@ import java.util.List;
 public class Config {
   private String title;
   private String version;
-  private List<ConfigStatement> constructs;
-  private List<ConfigStatement> updates;
+  private List<ConfigStatement> queries;
 
   public String getTitle() {
     return title;
@@ -16,12 +15,8 @@ public class Config {
     return version;
   }
 
-  public List<ConfigStatement> getConstructs() {
-    return constructs;
-  }
-
-  public List<ConfigStatement> getUpdates() {
-    return updates;
+  public List<ConfigStatement> getQueries() {
+    return queries;
   }
 
 }

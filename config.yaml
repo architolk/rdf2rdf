@@ -1,23 +1,30 @@
 title: Example configuration
 version: 1.0
-constructs:
+queries:
   - title: create classes
     query: >
       prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-      construct {
-        ?type a rdfs:Class
+      insert {
+        graph <urn:output> {
+          ?type a rdfs:Class
+        }
       }
       where {
-        ?s a ?type
+        graph <urn:input> {
+          ?s a ?type
+        }
       }
-updates:
   - title: add label to classes
     query: >
       prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
       insert {
-        ?type rdfs:label ?label
+        graph <urn:output> {
+          ?type rdfs:label ?label
+        }
       }
       where {
-        ?type a rdfs:Class.
-        BIND (strafter(str(?type),"#") as ?label)
+        graph <urn:output> {
+          ?type a rdfs:Class.
+          BIND (strafter(str(?type),"#") as ?label)
+        }
       }

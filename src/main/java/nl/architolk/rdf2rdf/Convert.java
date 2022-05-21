@@ -42,7 +42,7 @@ public class Convert {
         try {
           config = mapper.readValue(new File(args[2]), Config.class);
 
-          LOG.info("Configuration: {}, {} constructs(s), {} updates(s)",config.getTitle(),config.getConstructs().size(),config.getUpdates().size());
+          LOG.info("Configuration: {}, {} queries",config.getTitle(),config.getQueries().size());
         }
         catch (Exception e) {
           LOG.error(e.getMessage(),e);
@@ -51,32 +51,27 @@ public class Convert {
       }
 
       try {
-        Model outmodel;
+        Model outModel;
         if (args.length==3) {
-          Model inmodel = RDFDataMgr.loadModel(args[0]);
-          outmodel = ModelFactory.createDefaultModel();
-          for (ConfigStatement construct : config.getConstructs()) {
-            LOG.info("- construct: {}",construct.getTitle());
-            Query query = QueryFactory.create(construct.getQuery());
-            QueryExecution qe = QueryExecutionFactory.create(query,inmodel);
-            qe.execConstruct(outmodel);
-          }
-          Dataset dataset = DatasetFactory.create(outmodel);
+          Model inModel = RDFDataMgr.loadModel(args[0]);
+          Dataset dataset = DatasetFactory.create();
+          dataset.addNamedModel("urn:input",inModel);
           try {
-            for (ConfigStatement update : config.getUpdates()) {
-              LOG.info("- update: {}",update.getTitle());
-              UpdateRequest request = UpdateFactory.create(update.getQuery());
+            for (ConfigStatement query : config.getQueries()) {
+              LOG.info("- query: {}",query.getTitle());
+              UpdateRequest request = UpdateFactory.create(query.getQuery());
               UpdateExecution.dataset(dataset).update(request).execute();
             }
             dataset.commit();
           } finally {
             dataset.end();
           }
+          outModel = dataset.getNamedModel("urn:output");
+          outModel.setNsPrefixes(inModel);
         } else {
-          outmodel = RDFDataMgr.loadModel(args[0]);
+          outModel = RDFDataMgr.loadModel(args[0]);
         }
-        //RDFDataMgr.write(new FileOutputStream(args[1]),model, RDFFormat.JSONLD_COMPACT_PRETTY);
-        RDFDataMgr.write(new FileOutputStream(args[1]),outmodel, RDFLanguages.filenameToLang(args[1],RDFLanguages.JSONLD));
+        RDFDataMgr.write(new FileOutputStream(args[1]),outModel, RDFLanguages.filenameToLang(args[1],RDFLanguages.JSONLD));
         LOG.info("Done!");
       }
       catch (Exception e) {
