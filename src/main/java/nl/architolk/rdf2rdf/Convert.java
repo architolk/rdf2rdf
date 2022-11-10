@@ -68,6 +68,9 @@ public class Convert {
           }
           outModel = dataset.getNamedModel("urn:output");
           outModel.setNsPrefixes(inModel);
+          if (config.getPrefixes()!=null) {
+            outModel.setNsPrefixes(config.getPrefixes());
+          }
         } else {
           outModel = RDFDataMgr.loadModel(args[0]);
         }
