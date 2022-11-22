@@ -30,3 +30,18 @@ queries:
           BIND (strafter(str(?type),"#") as ?label)
         }
       }
+  - title: add uuid5
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix f: <java:nl.architolk.rdf2rdf.>
+      insert {
+        graph <urn:output> {
+          ?type rdfs:seeAlso ?uuid5
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?type rdfs:label ?label
+          BIND (f:uuid5(?label) as ?uuid5)
+        }
+      }
