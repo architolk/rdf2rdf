@@ -33,10 +33,15 @@ public class Convert {
     if (args.length >= 2) {
 
       LOG.info("Starting conversion");
-      LOG.info("Input file: {}",args[0]);
+      if (args.length==4) {
+        //Bit hacky, but extra input file at the end
+        LOG.info("Input files: {},{}",args[0],args[3]);
+      } else {
+        LOG.info("Input file: {}",args[0]);
+      }
       LOG.info("Ouput file: {}",args[1]);
 
-      if (args.length==3) {
+      if (args.length>=3) {
         LOG.info("Config file: {}",args[2]);
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         try {
@@ -52,8 +57,11 @@ public class Convert {
 
       try {
         Model outModel;
-        if (args.length==3) {
+        if (args.length>=3) {
           Model inModel = RDFDataMgr.loadModel(args[0]);
+          if (args.length==4) {
+            inModel.add(RDFDataMgr.loadModel(args[3]));
+          }
           Dataset dataset = DatasetFactory.create();
           dataset.addNamedModel("urn:input",inModel);
           try {
