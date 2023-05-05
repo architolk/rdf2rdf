@@ -1,12 +1,9 @@
 {
-  "@id" : "ex:jan",
-  "@type" : "ex:Persoon",
-  "label" : "Jan",
-  "@context" : {
-    "label" : {
-      "@id" : "http://www.w3.org/2000/01/rdf-schema#label"
-    },
-    "ex" : "http://examples.org#",
-    "rdfs" : "http://www.w3.org/2000/01/rdf-schema#"
-  }
+    "@id": "ex:jan",
+    "rdfs:label": "Jan",
+    "@type": "ex:Persoon",
+    "@context": {
+        "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+        "ex": "http://examples.org#"
+    }
 }

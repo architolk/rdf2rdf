@@ -22,74 +22,104 @@ import org.apache.jena.riot.RDFLanguages;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Convert {
+import picocli.CommandLine;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+
+import java.lang.Runnable;
+import java.util.List;
+
+@Command(name = "rdf2rdf")
+public class Convert implements Runnable{
 
   private static final Logger LOG = LoggerFactory.getLogger(Convert.class);
 
   private static Config config;
 
-  public static void main(String[] args) {
+  private String inputFile;
+  private String outputFile;
+  private String configFile;
+  private String extraInputFile;
 
-    if (args.length >= 2) {
+  @Parameters
+  private List params;
 
-      LOG.info("Starting conversion");
-      if (args.length==4) {
-        //Bit hacky, but extra input file at the end
-        LOG.info("Input files: {},{}",args[0],args[3]);
-      } else {
-        LOG.info("Input file: {}",args[0]);
+  @Override
+  public void run() {
+    if (params.size() >= 2) {
+      inputFile = (String)params.get(0);
+      outputFile = (String)params.get(1);
+      if (params.size()>=3) {
+        configFile = (String)params.get(2);
       }
-      LOG.info("Ouput file: {}",args[1]);
-
-      if (args.length>=3) {
-        LOG.info("Config file: {}",args[2]);
-        ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-        try {
-          config = mapper.readValue(new File(args[2]), Config.class);
-
-          LOG.info("Configuration: {}, {} queries",config.getTitle(),config.getQueries().size());
-        }
-        catch (Exception e) {
-          LOG.error(e.getMessage(),e);
-          return;
-        }
+      if (params.size()==4) {
+        extraInputFile = (String)params.get(3);
       }
-
-      try {
-        Model outModel;
-        if (args.length>=3) {
-          Model inModel = RDFDataMgr.loadModel(args[0]);
-          if (args.length==4) {
-            inModel.add(RDFDataMgr.loadModel(args[3]));
-          }
-          Dataset dataset = DatasetFactory.create();
-          dataset.addNamedModel("urn:input",inModel);
-          try {
-            for (ConfigStatement query : config.getQueries()) {
-              LOG.info("- query: {}",query.getTitle());
-              UpdateRequest request = UpdateFactory.create(query.getQuery());
-              UpdateExecution.dataset(dataset).update(request).execute();
-            }
-            dataset.commit();
-          } finally {
-            dataset.end();
-          }
-          outModel = dataset.getNamedModel("urn:output");
-          outModel.setNsPrefixes(inModel);
-          if (config.getPrefixes()!=null) {
-            outModel.setNsPrefixes(config.getPrefixes());
-          }
-        } else {
-          outModel = RDFDataMgr.loadModel(args[0]);
-        }
-        RDFDataMgr.write(new FileOutputStream(args[1]),outModel, RDFLanguages.filenameToLang(args[1],RDFLanguages.JSONLD));
-        LOG.info("Done!");
-      }
-      catch (Exception e) {
-        LOG.error(e.getMessage(),e);
-      }
+      startConverting();
     } else {
       LOG.info("Usage: rdf2rdf <input.xml> <output.xml> [config.yaml]");
     }
   }
+
+  private void startConverting() {
+
+    LOG.info("Starting conversion");
+    if (extraInputFile!=null) {
+      //Bit hacky, but extra input file at the end
+      LOG.info("Input files: {},{}",inputFile,extraInputFile);
+    } else {
+      LOG.info("Input file: {}",inputFile);
+    }
+    LOG.info("Ouput file: {}",outputFile);
+
+    if (configFile!=null) {
+      LOG.info("Config file: {}",configFile);
+      ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+      try {
+        config = mapper.readValue(new File(configFile), Config.class);
+
+        LOG.info("Configuration: {}, {} queries",config.getTitle(),config.getQueries().size());
+      }
+      catch (Exception e) {
+        LOG.error(e.getMessage(),e);
+        return;
+      }
+    }
+
+    try {
+      Model outModel;
+      if (configFile!=null) {
+        Model inModel = RDFDataMgr.loadModel(inputFile);
+        if (extraInputFile!=null) {
+          inModel.add(RDFDataMgr.loadModel(extraInputFile));
+        }
+        Dataset dataset = DatasetFactory.create();
+        dataset.addNamedModel("urn:input",inModel);
+        try {
+          for (ConfigStatement query : config.getQueries()) {
+            LOG.info("- query: {}",query.getTitle());
+            UpdateRequest request = UpdateFactory.create(query.getQuery());
+            UpdateExecution.dataset(dataset).update(request).execute();
+          }
+          dataset.commit();
+        } finally {
+          dataset.end();
+        }
+        outModel = dataset.getNamedModel("urn:output");
+        outModel.setNsPrefixes(inModel);
+        if (config.getPrefixes()!=null) {
+          outModel.setNsPrefixes(config.getPrefixes());
+        }
+      } else {
+        outModel = RDFDataMgr.loadModel(inputFile);
+      }
+      RDFDataMgr.write(new FileOutputStream(outputFile),outModel, RDFLanguages.filenameToLang(outputFile,RDFLanguages.JSONLD));
+      LOG.info("Done!");
+    }
+    catch (Exception e) {
+      LOG.error(e.getMessage(),e);
+    }
+  }
+
 }
