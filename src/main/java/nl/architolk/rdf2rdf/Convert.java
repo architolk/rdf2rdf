@@ -37,29 +37,52 @@ public class Convert implements Runnable{
 
   private static Config config;
 
+  @Option(names={"-i","-input"},description="Input file: <input.xml> or <input.ttl> or..")
   private String inputFile;
+  @Option(names={"-o","-output"},description="Output file: <output.xml> or <output.ttl> or..")
   private String outputFile;
+  @Option(names={"-c","-config"},description="Config file: <config.yaml> or..")
   private String configFile;
+  @Option(names={"-i2","-input2"},description="Extra input file: <input.xml> or <input.ttl> or..")
   private String extraInputFile;
+  @Option(names={"-f","-format"},description="Serialization format to use in output")
+  private String outputExt;
 
   @Parameters
   private List params;
 
   @Override
   public void run() {
-    if (params.size() >= 2) {
-      inputFile = (String)params.get(0);
-      outputFile = (String)params.get(1);
-      if (params.size()>=3) {
-        configFile = (String)params.get(2);
-      }
-      if (params.size()==4) {
-        extraInputFile = (String)params.get(3);
-      }
+    if ((inputFile!=null) && (outputFile!=null)) {
+      //New way of doing things, using real CLI parameters
       startConverting();
     } else {
-      LOG.info("Usage: rdf2rdf <input.xml> <output.xml> [config.yaml]");
+      //Original parameter structure
+      LOG.warn("Using deprecated way of stating parameters");
+      if (params.size() >= 2) {
+        inputFile = (String)params.get(0);
+        outputFile = (String)params.get(1);
+        if (params.size()>=3) {
+          configFile = (String)params.get(2);
+        }
+        if (params.size()==4) {
+          extraInputFile = (String)params.get(3);
+        }
+        startConverting();
+      } else {
+        LOG.info("Usage: rdf2rdf <input.xml> <output.xml> [config.yaml]");
+      }
     }
+  }
+
+  static private RDFFormat getFormat(String outputExt) {
+    RDFFormat format = null;
+    if (outputExt!=null) {
+      switch (outputExt) {
+        case "RDFXML_PLAIN": format=RDFFormat.RDFXML_PLAIN; break;
+      }
+    }
+    return format;
   }
 
   private void startConverting() {
@@ -114,7 +137,12 @@ public class Convert implements Runnable{
       } else {
         outModel = RDFDataMgr.loadModel(inputFile);
       }
-      RDFDataMgr.write(new FileOutputStream(outputFile),outModel, RDFLanguages.filenameToLang(outputFile,RDFLanguages.JSONLD));
+      RDFFormat outputFormat = getFormat(outputExt);
+      if (outputFormat==null) {
+        RDFDataMgr.write(new FileOutputStream(outputFile),outModel, RDFLanguages.filenameToLang(outputFile,RDFLanguages.JSONLD));
+      } else {
+        RDFDataMgr.write(new FileOutputStream(outputFile),outModel, outputFormat);
+      }
       LOG.info("Done!");
     }
     catch (Exception e) {

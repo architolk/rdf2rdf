@@ -1,0 +1,9 @@
+<rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:ex="http://examples.org#" > 
+  <rdf:Description rdf:about="http://examples.org#jan">
+    <rdfs:label>Jan</rdfs:label>
+    <rdf:type rdf:resource="http://examples.org#Persoon"/>
+  </rdf:Description>
+</rdf:RDF>
