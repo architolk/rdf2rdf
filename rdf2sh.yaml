@@ -1,0 +1,273 @@
+title: Convert RDF data to RDF model (SHACL and RDFS)
+version: 1.0
+prefixes:
+  rdfs: http://www.w3.org/2000/01/rdf-schema#
+  rdf: http://www.w3.org/1999/02/22-rdf-syntax-ns#
+  sh: http://www.w3.org/ns/shacl#
+  owl: http://www.w3.org/2002/07/owl#
+  xsd: http://www.w3.org/2001/XMLSchema#
+queries:
+  - title: create classes and nodeshapes
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      insert {
+        graph <urn:output> {
+          ?type a rdfs:Class, sh:NodeShape.
+          ?type sh:targetClass ?type.
+          ?type sh:count ?count.
+        }
+      }
+      where {
+        select ?type (count(?s) as ?count)
+        where {
+          graph <urn:input> {
+            ?s a ?type
+          }
+        }
+        group by ?type
+      }
+  - title: create properties (owl:DatatypeProperty)
+    query: >
+      prefix owl: <http://www.w3.org/2002/07/owl#>
+      insert {
+        graph <urn:output> {
+          ?prop a owl:DatatypeProperty.
+        }
+      }
+      where {
+        graph <urn:input> {
+          ?s ?prop ?o
+          FILTER (isLiteral(?o))
+        }
+      }
+  - title: create properties (owl:ObjectProperty)
+    query: >
+      prefix owl: <http://www.w3.org/2002/07/owl#>
+      insert {
+        graph <urn:output> {
+          ?prop a owl:ObjectProperty.
+        }
+      }
+      where {
+        graph <urn:input> {
+          ?s ?prop ?o
+          FILTER (isIRI(?o) || isBlank(?o))
+        }
+      }
+  - title: change property that is both DatatypeProperty and ObjectProperty
+    query: >
+      prefix owl: <http://www.w3.org/2002/07/owl#>
+      prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      delete {
+        graph <urn:output> {
+          ?prop a owl:ObjectProperty, owl:DatatypeProperty.
+        }
+      }
+      insert {
+        graph <urn:output> {
+          ?prop a rdf:Property.
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?prop a owl:ObjectProperty, owl:DatatypeProperty.
+        }
+      }
+  - title: add PropertyShapes
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      insert {
+        graph <urn:output> {
+          ?type sh:property [
+            a sh:PropertyShape;
+            sh:path ?prop;
+            sh:count ?count
+          ]
+        }
+      }
+      where {
+        select ?type ?prop (count(distinct ?s) as ?count)
+        where {
+          graph <urn:input> {
+            ?s a ?type.
+            ?s ?prop ?o
+          }
+        }
+        group by ?type ?prop
+      }
+  - title: add Datatype for pure literal PropertyShapes
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      insert {
+        graph <urn:output> {
+          ?pshape sh:nodeKind sh:Literal.
+          ?pshape sh:datatype ?datatype.
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?type sh:property ?pshape.
+          ?pshape a sh:PropertyShape.
+          ?pshape sh:path ?prop.
+        }
+        graph <urn:input> {
+          select distinct ?type ?prop (datatype(?o) as ?datatype)
+          where {
+            ?s a ?type.
+            ?s ?prop ?o.
+            FILTER(isLiteral(?o))
+          }
+        }
+      }
+  - title: add nodeKind=sh:BlankNode
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      insert {
+        graph <urn:output> {
+          ?pshape sh:nodeKind sh:BlankNode.
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?type sh:property ?pshape.
+          ?pshape a sh:PropertyShape.
+          ?pshape sh:path ?prop.
+        }
+        graph <urn:input> {
+          select distinct ?type ?prop
+          where {
+            ?s a ?type.
+            ?s ?prop ?o.
+            FILTER(isBlank(?o))
+          }
+        }
+      }
+  - title: add class reference
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      insert {
+        graph <urn:output> {
+          ?pshape sh:class ?class.
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?type sh:property ?pshape.
+          ?pshape a sh:PropertyShape.
+          ?pshape sh:path ?prop.
+        }
+        graph <urn:input> {
+          select distinct ?type ?prop ?class
+          where {
+            ?s a ?type.
+            ?s ?prop ?o.
+            ?o a ?class
+          }
+        }
+      }
+  - title: add min and max values (min value > 1)
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      insert {
+        graph <urn:output> {
+          ?pshape sh:minCount ?min.
+          ?pshape sh:maxCount ?max.
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?type sh:property ?pshape.
+          ?pshape a sh:PropertyShape.
+          ?pshape sh:path ?prop.
+        }
+        graph <urn:input> {
+          select ?type ?prop (min(?ocount) as ?min) (max(?ocount) as ?max)
+          where {
+            select ?type ?prop ?s (count(?o) as ?ocount)
+            where {
+              ?s a ?type.
+              ?s ?prop ?o
+            }
+            group by ?type ?prop ?s
+          }
+          group by ?type ?prop
+        }
+      }
+  - title: add min values (only 0 or 1)
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      delete {
+        graph <urn:output> {
+          ?pshape sh:minCount ?minCount.
+        }
+      }
+      insert {
+        graph <urn:output> {
+          ?pshape sh:minCount ?min.
+        }
+      }
+      where {
+        select ?pshape ?minCount (if(?ncount=?pcount,?minCount,0) as ?min)
+        where {
+          graph <urn:output> {
+            ?nshape sh:count ?ncount.
+            ?nshape sh:property ?pshape.
+            ?pshape a sh:PropertyShape.
+            ?pshape sh:count ?pcount.
+            ?pshape sh:minCount ?minCount
+          }
+        }
+      }
+  - title: add label to classes
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix owl: <http://www.w3.org/2002/07/owl#>
+      prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      insert {
+        graph <urn:output> {
+          ?s rdfs:label ?label.
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?s a ?t
+          FILTER (?t = rdfs:Class || ?t = rdf:Property || ?t = owl:ObjectProperty || ?t = owl:DatatypeProperty)
+          BIND (replace(str(?s),"^.*[:|#|/]([a-zA-Z0-9_-|\\.]*)$","$1") as ?label)
+        }
+      }
+  - title: add label to propertyshape
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      insert {
+        graph <urn:output> {
+          ?pshape rdfs:label ?label.
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?pshape sh:path ?prop.
+          ?prop rdfs:label ?label
+        }
+      }
+  - title: remove sh:count
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      delete {
+        graph <urn:output> {
+          ?s sh:count ?c
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?s sh:count ?c
+        }
+      }
