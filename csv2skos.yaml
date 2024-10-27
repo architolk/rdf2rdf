@@ -1,0 +1,28 @@
+title: CSV2SKOS - Convert tabular format to skos
+version: 1.0
+prefixes:
+  rdfs: http://www.w3.org/2000/01/rdf-schema#
+  csvw: http://www.w3.org/ns/csvw#
+  skos: http://www.w3.org/2004/02/skos/core#
+queries:
+  - title: create concepts
+    query: >
+      prefix p: <urn:property:>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix csvw: <http://www.w3.org/ns/csvw#>
+      insert {
+        graph <urn:output> {
+          ?concept a skos:Concept.
+          ?concept rdfs:label ?label.
+          ?concept skos:prefLabel ?label.
+        }
+      }
+      where {
+        graph <urn:input> {
+          ?table rdfs:label "Begrippen".
+          ?table csvw:row ?row.
+          ?row csvw:describes ?concept.
+          ?concept p:VOORKEURSTERM ?label
+        }
+      }
