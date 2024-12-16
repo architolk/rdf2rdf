@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.Iterator;
+import org.apache.jena.graph.Node;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
 import org.apache.jena.query.Query;
@@ -39,6 +41,8 @@ public class Convert implements Runnable{
 
   @Option(names={"-i","-input"},description="Input file: <input.xml> or <input.ttl> or..")
   private String inputFile;
+  @Option(names={"-g","-graph"},description="Graph output folder: <output>")
+  private String graphFolder;
   @Option(names={"-o","-output"},description="Output file: <output.xml> or <output.ttl> or..")
   private String outputFile;
   @Option(names={"-c","-config"},description="Config file: <config.yaml> or..")
@@ -53,7 +57,7 @@ public class Convert implements Runnable{
 
   @Override
   public void run() {
-    if ((inputFile!=null) && (outputFile!=null)) {
+    if ((inputFile!=null) && (((graphFolder!=null)) || (outputFile!=null))) {
       //New way of doing things, using real CLI parameters
       startConverting();
     } else {
@@ -94,7 +98,12 @@ public class Convert implements Runnable{
     } else {
       LOG.info("Input file: {}",inputFile);
     }
-    LOG.info("Ouput file: {}",outputFile);
+    if (outputFile!=null) {
+      LOG.info("Ouput file: {}",outputFile);
+    }
+    if (graphFolder!=null) {
+      LOG.info("Ouput graph folder: {}",graphFolder);
+    }
 
     if (configFile!=null) {
       LOG.info("Config file: {}",configFile);
@@ -134,17 +143,33 @@ public class Convert implements Runnable{
         if (config.getPrefixes()!=null) {
           outModel.setNsPrefixes(config.getPrefixes());
         }
+        if (graphFolder!=null) {
+          Iterator<Node> graphs = dataset.asDatasetGraph().listGraphNodes();
+          while (graphs.hasNext()) {
+            String graphname = graphs.next().getURI();
+            // Create filename that represents a normal name as much as possible: the part after the first : and without special characters
+            String filename = graphFolder+"/"+graphname.replaceAll("^.*:[^a-zA-Z0-9]*","").replaceAll("[^a-zA-Z0-9]","-").replaceAll("[-]+","-")+".ttl";
+            LOG.info("GRAPH OUTPUT: {}",filename);
+            Model graphModel = dataset.getNamedModel(graphname);
+            if (config.getPrefixes()!=null) {
+              graphModel.setNsPrefixes(config.getPrefixes());
+            }
+            RDFDataMgr.write(new FileOutputStream(filename),graphModel, RDFLanguages.TTL);
+          }
+        }
       } else {
         outModel = RDFDataMgr.loadModel(inputFile);
         if (extraInputFile!=null) {
           outModel.add(RDFDataMgr.loadModel(extraInputFile));
         }
       }
-      RDFFormat outputFormat = getFormat(outputExt);
-      if (outputFormat==null) {
-        RDFDataMgr.write(new FileOutputStream(outputFile),outModel, RDFLanguages.filenameToLang(outputFile,RDFLanguages.JSONLD));
-      } else {
-        RDFDataMgr.write(new FileOutputStream(outputFile),outModel, outputFormat);
+      if (outputFile!=null) {
+        RDFFormat outputFormat = getFormat(outputExt);
+        if (outputFormat==null) {
+          RDFDataMgr.write(new FileOutputStream(outputFile),outModel, RDFLanguages.filenameToLang(outputFile,RDFLanguages.JSONLD));
+        } else {
+          RDFDataMgr.write(new FileOutputStream(outputFile),outModel, outputFormat);
+        }
       }
       LOG.info("Done!");
     }

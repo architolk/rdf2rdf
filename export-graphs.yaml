@@ -1,0 +1,17 @@
+title: Example configuration
+version: 1.0
+prefixes:
+  rdfs: http://www.w3.org/2000/01/rdf-schema#
+queries:
+  - title: create graph per subject
+    query: >
+      insert {
+        graph ?s {
+          ?s ?p ?o
+        }
+      }
+      where {
+        graph <urn:input> {
+          ?s ?p ?o
+        }
+      }

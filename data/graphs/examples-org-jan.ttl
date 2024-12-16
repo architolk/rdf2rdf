@@ -1,0 +1,5 @@
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://examples.org#jan>
+        a           <http://examples.org#Persoon> ;
+        rdfs:label  "Jan" .
