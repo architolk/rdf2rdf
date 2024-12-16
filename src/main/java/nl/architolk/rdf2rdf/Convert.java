@@ -136,6 +136,9 @@ public class Convert implements Runnable{
         }
       } else {
         outModel = RDFDataMgr.loadModel(inputFile);
+        if (extraInputFile!=null) {
+          outModel.add(RDFDataMgr.loadModel(extraInputFile));
+        }
       }
       RDFFormat outputFormat = getFormat(outputExt);
       if (outputFormat==null) {
