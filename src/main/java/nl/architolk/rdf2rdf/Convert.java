@@ -1,5 +1,10 @@
 package nl.architolk.rdf2rdf;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.io.File;
@@ -39,6 +44,8 @@ public class Convert implements Runnable{
 
   private static Config config;
 
+  @Option(names={"-p","-path"},description="Input path: <pathname>")
+  private String inputPath;
   @Option(names={"-i","-input"},description="Input file: <input.xml> or <input.ttl> or..")
   private String inputFile;
   @Option(names={"-g","-graph"},description="Graph output folder: <output>")
@@ -89,11 +96,32 @@ public class Convert implements Runnable{
     return format;
   }
 
+  private Model loadModels() throws Exception {
+
+    if (inputPath!=null) {
+      Model model = null;
+      Path dir = Paths.get(inputPath);
+      DirectoryStream<Path> dirS = Files.newDirectoryStream(dir,inputFile);
+      for (Path entry: dirS) {
+        if (model!=null) {
+          model.add(RDFDataMgr.loadModel(entry.toString()));
+        } else {
+          model = RDFDataMgr.loadModel(entry.toString());
+        }
+      }
+      return model;
+    } else {
+      return RDFDataMgr.loadModel(inputFile);
+    }
+  }
+
   private void startConverting() {
 
     LOG.info("Starting conversion");
+    if (inputPath!=null) {
+      LOG.info("Input path: {}",inputPath);
+    }
     if (extraInputFile!=null) {
-      //Bit hacky, but extra input file at the end
       LOG.info("Input files: {},{}",inputFile,extraInputFile);
     } else {
       LOG.info("Input file: {}",inputFile);
@@ -122,7 +150,7 @@ public class Convert implements Runnable{
     try {
       Model outModel;
       if (configFile!=null) {
-        Model inModel = RDFDataMgr.loadModel(inputFile);
+        Model inModel = loadModels();
         if (extraInputFile!=null) {
           inModel.add(RDFDataMgr.loadModel(extraInputFile));
         }
@@ -139,7 +167,9 @@ public class Convert implements Runnable{
           dataset.end();
         }
         outModel = dataset.getNamedModel("urn:output");
-        outModel.setNsPrefixes(inModel);
+        if (config.getAddPrefixesOption()) {
+          outModel.setNsPrefixes(inModel);
+        }
         if (config.getPrefixes()!=null) {
           outModel.setNsPrefixes(config.getPrefixes());
         }
@@ -158,7 +188,7 @@ public class Convert implements Runnable{
           }
         }
       } else {
-        outModel = RDFDataMgr.loadModel(inputFile);
+        outModel = loadModels();
         if (extraInputFile!=null) {
           outModel.add(RDFDataMgr.loadModel(extraInputFile));
         }

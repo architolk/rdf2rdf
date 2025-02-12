@@ -1,0 +1,34 @@
+@prefix ex:   <http://examples.org#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+ex:Persoon  rdf:type    rdfs:Class , sh:NodeShape ;
+        rdfs:label      "Persoon" ;
+        rdfs:seeAlso    <urn:uuid:722d2d86-f9ba-5ab7-9f3c-9a779abfdaf8> ;
+        sh:property     [ rdf:type     sh:PropertyShape ;
+                          rdfs:label   "label" ;
+                          sh:datatype  xsd:string ;
+                          sh:maxCount  1 ;
+                          sh:minCount  1 ;
+                          sh:nodeKind  sh:Literal ;
+                          sh:path      rdfs:label
+                        ] ;
+        sh:property     [ rdf:type     sh:PropertyShape ;
+                          rdfs:label   "type" ;
+                          sh:maxCount  1 ;
+                          sh:minCount  1 ;
+                          sh:path      rdf:type
+                        ] ;
+        sh:targetClass  ex:Persoon .
+
+rdf:type  rdf:type  owl:ObjectProperty ;
+        rdfs:label  "type" .
+
+ex:jan  rdf:type    ex:Persoon ;
+        rdfs:label  "Jan" .
+
+rdfs:label  rdf:type  owl:DatatypeProperty ;
+        rdfs:label  "label" .
