@@ -1,0 +1,95 @@
+title: Translate RDFS/OWL model to SHACL model
+version: 1.0
+prefixes:
+  rdfs: http://www.w3.org/2000/01/rdf-schema#
+  rdf: http://www.w3.org/1999/02/22-rdf-syntax-ns#
+  sh: http://www.w3.org/ns/shacl#
+  owl: http://www.w3.org/2002/07/owl#
+  xsd: http://www.w3.org/2001/XMLSchema#
+queries:
+  - title: copy classes and properties to output
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      prefix owl: <http://www.w3.org/2002/07/owl#>
+      insert {
+        graph <urn:output> {
+          ?s a ?t.
+          ?s ?p ?o.
+        }
+      }
+      where {
+        graph <urn:input> {
+          ?s a ?t.
+          ?s ?p ?o.
+          FILTER (?t=owl:Class || ?t=rdfs:Class || ?t=rdfs:Class || ?t=rdf:Property || ?t=owl:DatatypeProperty || ?t=owl:ObjectProperty)
+          FILTER (?p=rdfs:label || ?p=rdfs:comment || ?p=rdfs:subClassOf)
+        }
+      }
+  - title: add sh:NodeShape to class
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      prefix owl: <http://www.w3.org/2002/07/owl#>
+      insert {
+        graph <urn:output> {
+          ?class a sh:NodeShape.
+          ?class sh:targetClass ?class
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?class a ?p
+          FILTER (?p=owl:Class || ?p=rdfs:Class)
+        }
+      }
+  - title: add sh:property construct for rdfs:domain
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      prefix owl: <http://www.w3.org/2002/07/owl#>
+      insert {
+        graph <urn:output> {
+          ?class sh:property [
+            a sh:PropertyShape;
+            rdfs:label ?label;
+            sh:name ?label;
+            sh:path ?property
+          ];
+        }
+      }
+      where {
+        select distinct ?property ?label ?class
+        where {
+          graph <urn:input> {
+            ?property rdfs:domain ?class.
+            ?property rdfs:label ?label.
+          }
+          graph <urn:output> {
+            ?class a ?t
+          }
+        }
+      }
+  - title: add sh:property construct for rdfs:range to class
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      prefix owl: <http://www.w3.org/2002/07/owl#>
+      insert {
+        graph <urn:output> {
+          ?pshape sh:class ?refclass
+        }
+      }
+      where {
+        graph <urn:input> {
+          ?property rdfs:domain ?class.
+          ?property rdfs:range ?refclass.
+        }
+        graph <urn:output> {
+          ?class a ?t.
+          ?class sh:property ?pshape.
+          ?pshape sh:path ?property.
+          ?refclass a ?t.
+        }
+      }

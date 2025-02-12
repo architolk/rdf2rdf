@@ -7,6 +7,37 @@ prefixes:
   owl: http://www.w3.org/2002/07/owl#
   xsd: http://www.w3.org/2001/XMLSchema#
 queries:
+  - title: testquery startup
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      insert {
+          graph <urn:test> {
+            <urn:name:bnode1> rdfs:label "a".
+            <urn:name:bnode2> rdfs:label "a".
+          }
+      }
+      where {}
+  - title: testquery
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      insert {
+        graph <urn:output> {
+          <urn:name:test> rdfs:seeAlso ?bnode.
+          ?bnode rdfs:label ?o.
+          ?bnode rdfs:seeAlso ?s
+        }
+      }
+      where {
+        graph <urn:test> {
+          {
+            select ?o (bnode(?o) as ?bnode)
+            where {
+              {select distinct ?o {?s ?p ?o }}
+            }
+          }
+          ?s ?p ?o
+        }
+      }
   - title: create classes and nodeshapes
     query: >
       prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -269,5 +300,137 @@ queries:
       where {
         graph <urn:output> {
           ?s sh:count ?c
+        }
+      }
+  - title: create xone for multiple classes - first one only
+    query: >
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      insert {
+        graph <urn:output> {
+          ?s sh:node [sh:xone [rdf:first ?first]]
+        }
+      }
+      where {
+        select distinct ?s ?first {
+          graph <urn:output> {
+            ?s sh:class ?first.
+            ?s sh:class ?other.
+            FILTER (?first != ?other)
+            FILTER NOT EXISTS {
+              ?s sh:class ?next
+              FILTER (str(?next) < str(?first))
+            }
+          }
+        }
+      }
+  - title: create xone for multiple classes - others
+    query: >
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      insert {
+        graph <urn:output> {
+          ?top rdf:rest ?rest.
+          ?rest rdf:first ?next.
+        }
+      }
+      where {
+        select distinct (if(?start=?first,?list,iri(concat("urn:md5:",md5(concat(str(?s),str(?first)))))) as ?top) (iri(concat("urn:md5:",md5(concat(str(?s),str(?next))))) as ?rest) ?next
+        where {
+          graph <urn:output> {
+            ?s sh:node/sh:xone ?list.
+            ?list rdf:first ?start.
+            ?s sh:class ?first.
+            ?s sh:class ?next.
+            FILTER (str(?first) < str(?next))
+            FILTER NOT EXISTS {
+              ?s sh:class ?between.
+              FILTER ((str(?first) < str(?between)) && (str(?between) < str(?next)))
+            }
+          }
+        }
+      }
+  - title: convert IRIs to BNODEs - step 1 (create blank nodes)
+    query: >
+      prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      insert {
+        graph <urn:output> {
+          ?head rdf:rest ?tailbn.
+          ?tailbn ?p ?o
+        }
+      }
+      where {
+        graph <urn:output> {
+          {
+            select ?tail (bnode(str(?tail)) as ?tailbn)
+            where {select distinct ?tail {?head rdf:rest ?tail}}
+          }
+          ?head rdf:rest ?tail.
+          ?tail ?p ?o
+        }
+      }
+  - title: convert IRIs to BNODEs - step 2 (link blank nodes)
+    query: >
+      prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      delete {
+        graph <urn:output> {
+          ?next rdf:rest ?tail
+        }
+      }
+      insert {
+        graph <urn:output> {
+          ?nextbn rdf:rest ?tail
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?head rdf:rest ?next.
+          ?head rdf:rest ?nextbn.
+          ?next rdf:rest ?tail
+          FILTER (isblank(?nextbn))
+        }
+      }
+  - title: convert IRIs to BNODEs - step 3 (cleanup)
+    query: >
+      prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      delete {
+        graph <urn:output> {
+          ?next rdf:rest ?tail
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?next rdf:rest ?tail
+          FILTER (!isblank(?tail))
+        }
+      }
+  - title: add closure (rdf:rest rdf:nil)
+    query: >
+      prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      insert {
+        graph <urn:output> {
+          ?end rdf:rest rdf:nil
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?end rdf:first ?first.
+          FILTER NOT EXISTS {?end rdf:rest ?rest}
+        }
+      }
+  - title: delete sh:class in case of multiple classes
+    query: >
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      delete {
+        graph <urn:output> {
+          ?s sh:class ?anytype
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?s sh:class ?anytype.
+          ?s sh:class ?type1.
+          ?s sh:class ?type2.
+          FILTER (?type1 != ?type2)
         }
       }
