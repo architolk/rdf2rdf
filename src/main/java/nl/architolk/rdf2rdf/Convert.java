@@ -26,6 +26,10 @@ import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.riot.RDFFormat;
 import org.apache.jena.riot.RDFLanguages;
+import org.apache.jena.shacl.ShaclValidator;
+import org.apache.jena.shacl.Shapes;
+import org.apache.jena.shacl.ValidationReport;
+import org.apache.jena.shacl.lib.ShLib;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,6 +58,8 @@ public class Convert implements Runnable{
   private String outputFile;
   @Option(names={"-c","-config"},description="Config file: <config.yaml> or..")
   private String configFile;
+  @Option(names={"-s","-shapes"},description="Shapes file: <shapes.xml> or <shapes.ttl> or..")
+  private String shapesFile;
   @Option(names={"-i2","-input2"},description="Extra input file: <input.xml> or <input.ttl> or..")
   private String extraInputFile;
   @Option(names={"-f","-format"},description="Serialization format to use in output")
@@ -64,7 +70,7 @@ public class Convert implements Runnable{
 
   @Override
   public void run() {
-    if ((inputFile!=null) && (((graphFolder!=null)) || (outputFile!=null))) {
+    if ((inputFile!=null) && ((graphFolder!=null) || (outputFile!=null) || (shapesFile!=null))) {
       //New way of doing things, using real CLI parameters
       startConverting();
     } else {
@@ -133,6 +139,10 @@ public class Convert implements Runnable{
       LOG.info("Ouput graph folder: {}",graphFolder);
     }
 
+    if (shapesFile!=null) {
+      LOG.info("Shapes graph file: {}",shapesFile);
+    }
+
     if (configFile!=null) {
       LOG.info("Config file: {}",configFile);
       ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
@@ -148,6 +158,7 @@ public class Convert implements Runnable{
     }
 
     try {
+      Model shapesModel;
       Model outModel;
       if (configFile!=null) {
         Model inModel = loadModels();
@@ -191,6 +202,17 @@ public class Convert implements Runnable{
         outModel = loadModels();
         if (extraInputFile!=null) {
           outModel.add(RDFDataMgr.loadModel(extraInputFile));
+        }
+      }
+      if (shapesFile!=null) {
+        shapesModel = RDFDataMgr.loadModel(shapesFile);
+        Shapes shapes = Shapes.parse(shapesModel);
+        ValidationReport report = ShaclValidator.get().validate(shapes, outModel.getGraph());
+        ShLib.printReport(report);
+        if (report.conforms()) {
+          LOG.info("Output conforms to shapes graph");
+        } else {
+          throw new Exception("Shacl validation failed");
         }
       }
       if (outputFile!=null) {
