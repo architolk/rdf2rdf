@@ -168,6 +168,7 @@ public class Convert implements Runnable{
         Dataset dataset = DatasetFactory.create();
         dataset.addNamedModel("urn:input",inModel);
         try {
+          org.apache.jena.query.ARQ.init();
           for (ConfigStatement query : config.getQueries()) {
             LOG.info("- query: {}",query.getTitle());
             UpdateRequest request = UpdateFactory.create(query.getQuery());
@@ -212,7 +213,7 @@ public class Convert implements Runnable{
         if (report.conforms()) {
           LOG.info("Output conforms to shapes graph");
         } else {
-          throw new Exception("Shacl validation failed");
+          throw new Exception("RDF2RDF - Shacl validation failed");
         }
       }
       if (outputFile!=null) {
