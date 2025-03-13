@@ -7,37 +7,6 @@ prefixes:
   owl: http://www.w3.org/2002/07/owl#
   xsd: http://www.w3.org/2001/XMLSchema#
 queries:
-  - title: testquery startup
-    query: >
-      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-      insert {
-          graph <urn:test> {
-            <urn:name:bnode1> rdfs:label "a".
-            <urn:name:bnode2> rdfs:label "a".
-          }
-      }
-      where {}
-  - title: testquery
-    query: >
-      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-      insert {
-        graph <urn:output> {
-          <urn:name:test> rdfs:seeAlso ?bnode.
-          ?bnode rdfs:label ?o.
-          ?bnode rdfs:seeAlso ?s
-        }
-      }
-      where {
-        graph <urn:test> {
-          {
-            select ?o (bnode(?o) as ?bnode)
-            where {
-              {select distinct ?o {?s ?p ?o }}
-            }
-          }
-          ?s ?p ?o
-        }
-      }
   - title: create classes and nodeshapes
     query: >
       prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -201,6 +170,57 @@ queries:
           }
         }
       }
+  - title: add node reference if class reference is missing
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      insert {
+        graph <urn:output> {
+          ?pshape sh:node ?nshape. #It would be better to use a blank node, but that gives problems with diagram generation...
+          ?nshape a sh:NodeShape
+        }
+      }
+      where {
+        select distinct ?pshape (iri(concat(str(?path),"__NODE")) as ?nshape)
+        where {
+          graph <urn:output> {
+            ?pshape sh:path ?path.
+            FILTER NOT EXISTS {?pshape sh:class ?class}
+            FILTER NOT EXISTS {?pshape sh:nodeKind sh:Literal}
+          }
+          FILTER EXISTS {
+            graph <urn:input> {
+              ?s ?path ?o.
+              ?o ?op ?oo.
+            }
+          }
+        }
+      }
+  - title: add propertyshape for node references
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      insert {
+        graph <urn:output> {
+          ?nshape sh:property [
+            a sh:PropertyShape;
+            sh:path ?prop
+          ]
+        }
+      }
+      where {
+        select distinct ?nshape ?prop
+        where {
+          graph <urn:output> {
+            ?pshape sh:node ?nshape.
+            ?pshape sh:path ?nodeprop
+          }
+          graph <urn:input> {
+            ?s ?nodeprop ?o.
+            ?o ?prop ?oo
+          }
+        }
+      }
   - title: add min and max values (min value > 1)
     query: >
       prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -271,6 +291,22 @@ queries:
           ?s a ?t
           FILTER (?t = rdfs:Class || ?t = rdf:Property || ?t = owl:ObjectProperty || ?t = owl:DatatypeProperty)
           BIND (replace(str(?s),"^.*[:|#|/]([a-zA-Z0-9_-|\\.]*)$","$1") as ?label)
+        }
+      }
+  - title: add label to nodeshape from sh:node (no class)
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix sh: <http://www.w3.org/ns/shacl#>
+      insert {
+        graph <urn:output> {
+          ?nshape rdfs:label ?label.
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?pshape sh:path ?prop.
+          ?prop rdfs:label ?label.
+          ?pshape sh:node ?nshape
         }
       }
   - title: add label to propertyshape
