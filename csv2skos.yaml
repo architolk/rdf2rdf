@@ -1,28 +1,751 @@
-title: CSV2SKOS - Convert tabular format to skos
+title: Convert tabular format from Excel to SKOS
 version: 1.0
 prefixes:
-  rdfs: http://www.w3.org/2000/01/rdf-schema#
-  csvw: http://www.w3.org/ns/csvw#
   skos: http://www.w3.org/2004/02/skos/core#
+  skosxl: http://www.w3.org/2008/05/skos-xl#
+  skosthes: http://purl.org/iso25964/skos-thes#
+  prov: http://www.w3.org/ns/prov#
+  dcat: http://www.w3.org/ns/dcat#
+  dct: http://purl.org/dc/terms/
 queries:
-  - title: create concepts
+  - title: Begripsrelaties opnemen in named graph
     query: >
-      prefix p: <urn:property:>
       prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
       prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix skosthes: <http://purl.org/iso25964/skos-thes#>
+      insert {
+        graph <urn:relatietypen> {
+          skosthes:broaderGeneric rdfs:label "is specialisatie van".
+          skosthes:narrowerGeneric rdfs:label "is generalisatie van".
+          skosthes:broaderPartitive rdfs:label "is onderdeel van".
+          skosthes:narrowerPartitive rdfs:label "omvat".
+          skosthes:broaderInstantial rdfs:label "is exemplaar van".
+          skos:related rdfs:label "is gerelateerd aan".
+          skos:related rdfs:label "is eigenschap van".
+        }
+      }
+      where {}
+  - title: Trim spaties begin en einde
+    query: >
+      delete {
+        graph <urn:input> {
+          ?s ?p ?o
+        }
+      }
+      insert {
+        graph <urn:input> {
+          ?s ?p ?otrim
+        }
+      }
+      where {
+        select ?s ?p ?o (replace(?o,"^[\\s\\t]+|[\\s\\t]+$","") as ?otrim)
+        where {
+          graph <urn:input> {
+            ?s ?p ?o
+            FILTER(isLiteral(?o) && (regex(?o,"\\s$") || regex(?o,"^\\s")))
+          }
+        }
+      }
+  - title: Trim dubbele spaties tussenin
+    query: >
+      delete {
+        graph <urn:input> {
+          ?s ?p ?o
+        }
+      }
+      insert {
+        graph <urn:input> {
+          ?s ?p ?otrim
+        }
+      }
+      where {
+        select ?s ?p ?o (replace(?o," [ ]+"," ") as ?otrim)
+        where {
+          graph <urn:input> {
+            ?s ?p ?o
+            FILTER(isLiteral(?o) && regex(?o," [ ]+"))
+          }
+        }
+      }
+  - title: Aanmaken modelversies
+    query: >
+      prefix def: <urn:property:>
       prefix csvw: <http://www.w3.org/ns/csvw#>
+      prefix dcat: <http://www.w3.org/ns/dcat#>
+      prefix dct: <http://purl.org/dc/terms/>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      prefix prov: <http://www.w3.org/ns/prov#>
+      prefix f: <java:nl.architolk.rdf2rdf.>
+      insert {
+        graph <urn:output> {
+          ?modelversie a dcat:Dataset.
+          ?modelversie rdfs:label ?modelversienaam.
+          ?modelversie dcat:inSeries ?model.
+          ?modelversie dct:modified ?versiedatum.
+          ?modelversie dcat:version ?versienummer.
+          ?modelversie dct:issued ?registratiemoment.
+          ?model a dcat:DatasetSeries, skos:ConceptScheme.
+          ?model rdfs:label ?modelnaam.
+          ?model dct:title ?modelnaam.
+        }
+        graph <urn:metadata> {
+          ?modelversie a prov:Entity.
+          ?model a skos:ConceptScheme.
+          ?model skos:notation ?modelcode
+        }
+      }
+      where {
+        select (now() as ?registratiemoment)
+               (if(?urimodel!="",iri(?urimodel),f:uuid5(?modelcode)) as ?model) ?modelnaam
+               (f:uuid5(concat(?modelcode,"-",?releasenummer)) as ?modelversie) (concat(?modelnaam," ",?releasenummer) as ?modelversienaam)
+               ?versienummer ?versiedatum
+               ?modelcode (concat(?modelcode,"-",?releasenummer) as ?modelversiecode)
+        where {
+          select distinct ?modelnaam
+                          (strbefore(concat(replace(lcase(?versienummer),"[^0-9]*snapshot"," snapshot")," snapshot")," snapshot") as ?releasenummer) ?versiedatum ?versienummer
+                          ?modelcode (if(bound(?uri),lcase(?uri),"") as ?urimodel)
+          where {
+            graph <urn:input> {
+              <urn:excel:sheet1> csvw:row/csvw:describes ?row1.
+              ?row1 def:Rubriek "Code model"^^xsd:string.
+              ?row1 def:Invulling ?modelcode.
+              <urn:excel:sheet1> csvw:row/csvw:describes ?row2.
+              ?row2 def:Rubriek "Naam model"^^xsd:string.
+              ?row2 def:Invulling ?modelnaam.
+              <urn:excel:sheet1> csvw:row/csvw:describes ?row3.
+              ?row3 def:Rubriek "Versienummer model"^^xsd:string.
+              ?row3 def:Invulling ?versienummer.
+              <urn:excel:sheet1> csvw:row/csvw:describes ?row4.
+              ?row4 def:Rubriek "Versiedatum model"^^xsd:string.
+              ?row4 def:Invulling ?versiedatum.
+              OPTIONAL {
+                <urn:excel:sheet1> csvw:row/csvw:describes ?row12.
+                ?row12 def:Rubriek "Modelidentificatie"^^xsd:string.
+                ?row12 def:Invulling ?uri
+              }
+            }
+          }
+        }
+      }
+  - title: Aanmaken aanvullende begrippenkaders
+    query: >
+      prefix def: <urn:property:>
+      prefix csvw: <http://www.w3.org/ns/csvw#>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      insert {
+        graph <urn:output> {
+          ?scheme a skos:ConceptScheme.
+          ?scheme rdfs:label ?label.
+        }
+        graph <urn:metadata> {
+          ?row skos:inScheme ?scheme
+        }
+      }
+      where {
+        select ?row (iri(concat("urn:name:scheme:",replace(?label," ",""))) as ?scheme) ?label
+        where {
+          graph <urn:input> {
+            ?sheet1 rdfs:label "Begrippen"^^xsd:string.
+            ?sheet1 csvw:row/csvw:describes ?row.
+            ?row def:HOOFDONDERWERP ?label
+          }
+        }
+      }
+  - title: Aanmaken begrippen
+    query: >
+      prefix def: <urn:property:>
+      prefix csvw: <http://www.w3.org/ns/csvw#>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix prov: <http://www.w3.org/ns/prov#>
+      prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      prefix f: <java:nl.architolk.rdf2rdf.>
       insert {
         graph <urn:output> {
           ?concept a skos:Concept.
-          ?concept rdfs:label ?label.
-          ?concept skos:prefLabel ?label.
+        }
+        graph <urn:metadata> {
+          ?concept prov:wasDerivedFrom ?row.
+        }
+      }
+      where {
+        select (f:uuid5(concat(?nsp,?term)) as ?concept) ?row
+        where {
+          graph <urn:metadata> {
+            ?m skos:notation ?nsp.
+          }
+          graph <urn:input> {
+            ?sheet rdfs:label "Begrippen"^^xsd:string.
+            ?sheet csvw:row/csvw:describes ?row.
+            ?row def:VOORKEURSTERM ?term.
+          }
+        }
+      }
+  - title: Talige elementen voorkeurstaal toevoegen
+    query: >
+      prefix def: <urn:property:>
+      prefix csvw: <http://www.w3.org/ns/csvw#>
+      prefix prov: <http://www.w3.org/ns/prov#>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      insert {
+        graph <urn:output> {
+          ?concept rdfs:label ?terml.
+          ?concept skos:prefLabel ?terml.
+          ?concept skos:definition ?definitiel.
+          ?concept skos:scopeNote ?toelichtingl.
+          ?concept skos:altLabel ?synonieml.
+          ?concept skos:editorialNote ?redactl.
+          ?concept skos:example ?voorbeeld
+        }
+      }
+      where {
+        select ?concept ?row
+               (strlang(?term,lcase(?pt)) as ?terml)
+               (if(bound(?definitie),strlang(?definitie,lcase(?pt)),?definitie) as ?definitiel)
+               (if(bound(?toelichting),strlang(?toelichting,lcase(?pt)),?toelichting) as ?toelichtingl)
+               (if(bound(?redact),strlang(?redact,lcase(?pt)),?redact) as ?redactl)
+               (if(bound(?synoniem),strlang(?synoniem,lcase(?pt)),?synoniem) as ?synonieml)
+               ?voorbeeld
+        where {
+          graph <urn:input> {
+            <urn:excel:sheet1> csvw:row/csvw:describes ?row1.
+            ?row1 def:Rubriek "Primaire taal van het model"^^xsd:string.
+            ?row1 def:Invulling ?pt.
+            ?sheet rdfs:label "Begrippen"^^xsd:string.
+            ?sheet csvw:row/csvw:describes ?row.
+            ?row def:VOORKEURSTERM ?term.
+            OPTIONAL {?row def:DEFINITIE ?definitie}
+            OPTIONAL {?row def:TOELICHTING ?toelichting}
+            OPTIONAL {?row def:ALTERNATIEVE_TERMEN ?synoniem}
+            OPTIONAL {?row def:REDACTIONELE_OPMERKING ?redact}
+            OPTIONAL {?row def:VOORBEELDEN ?voorbeeld}
+          }
+          graph <urn:metadata> {
+            ?concept prov:wasDerivedFrom ?row.
+          }
+        }
+      }
+  - title: Talige elementen secundaire taal toevoegen
+    query: >
+      prefix def: <urn:property:>
+      prefix csvw: <http://www.w3.org/ns/csvw#>
+      prefix prov: <http://www.w3.org/ns/prov#>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      insert {
+        graph <urn:output> {
+          ?concept rdfs:label ?terml.
+          ?concept skos:prefLabel ?terml.
+          ?concept skos:definition ?definitiel.
+        }
+      }
+      where {
+        select ?modelversie ?concept ?row
+               (strlang(?term,lcase(?pt)) as ?terml)
+               (if(bound(?definitie),strlang(?definitie,lcase(?pt)),?definitie) as ?definitiel)
+        where {
+          graph <urn:input> {
+            <urn:excel:sheet1> csvw:row/csvw:describes ?row1.
+            ?row1 def:Rubriek "Secundaire taal van het model"^^xsd:string.
+            ?row1 def:Invulling ?pt.
+            ?sheet rdfs:label "Begrippen"^^xsd:string.
+            ?sheet csvw:row/csvw:describes ?row.
+            ?row def:VOORKEURSTERM_SECUNDAIRE_TAAL ?term.
+            OPTIONAL {?row def:DEFINITIE_SECUNDAIRE_TAAL ?definitie}
+          }
+          graph <urn:metadata> {
+            ?concept prov:wasDerivedFrom ?row.
+          }
+        }
+      }
+  - title: Codes toevoegen
+    query: >
+      prefix def: <urn:property:>
+      prefix csvw: <http://www.w3.org/ns/csvw#>
+      prefix prov: <http://www.w3.org/ns/prov#>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      insert {
+        graph <urn:output> {
+          ?concept skos:notation ?notation.
+        }
+      }
+      where {
+        select ?modelversie ?concept ?notation
+        where {
+          graph <urn:input> {
+            ?sheet rdfs:label "Begrippen"^^xsd:string.
+            ?sheet csvw:row/csvw:describes ?row.
+            ?row def:CODE ?notation.
+          }
+          graph <urn:metadata> {
+            ?concept prov:wasDerivedFrom ?row.
+          }
+        }
+      }
+  - title: JAS annotaties toevoegen
+    query: >
+      prefix def: <urn:property:>
+      prefix csvw: <http://www.w3.org/ns/csvw#>
+      prefix prov: <http://www.w3.org/ns/prov#>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      insert {
+        graph <urn:output> {
+          ?concept a ?classificatie
+        }
+      }
+      where {
+        select ?concept (iri(concat("http://bp4mc2.org/def/jas#",replace(?classlabel," ",""))) as ?classificatie)
+        where {
+          graph <urn:input> {
+            ?sheet rdfs:label "Begrippen"^^xsd:string.
+            ?sheet csvw:row/csvw:describes ?row.
+            ?row def:CLASSIFICATIE ?classlabel.
+          }
+          graph <urn:metadata> {
+            ?concept prov:wasDerivedFrom ?row.
+          }
+        }
+      }
+  - title: Link begrip met model (= skos:ConceptScheme)
+    query: >
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix prov: <http://www.w3.org/ns/prov#>
+      insert {
+        graph <urn:output> {
+          ?concept a skos:Concept.
+          ?concept skos:inScheme ?scheme.
+        }
+      }
+      where {
+        graph <urn:metadata> {
+          {
+            ?scheme a skos:ConceptScheme.
+            ?concept prov:wasDerivedFrom ?row.
+            FILTER NOT EXISTS {?row skos:inScheme ?somescheme}
+          }
+          UNION
+          {
+            ?concept prov:wasDerivedFrom ?row.
+            ?row skos:inScheme ?scheme
+          }
+        }
+      }
+  - title: Bronnen toevoegen
+    query: >
+      prefix def: <urn:property:>
+      prefix csvw: <http://www.w3.org/ns/csvw#>
+      prefix prov: <http://www.w3.org/ns/prov#>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      prefix dct: <http://purl.org/dc/terms/>
+      prefix f: <java:nl.architolk.rdf2rdf.>
+      insert {
+        graph <urn:output> {
+          ?bron a dct:BibliographicResource.
+          ?bron rdfs:label ?label.
+          ?bron dct:title ?label.
+          ?bron dct:identifier ?refnaam.
+          ?bron dct:bibliographicCitation ?link.
+          ?bron dct:isPartOf ?parent
+        }
+        graph <urn:metadata> {
+          ?bron dct:identifier ?refnaam.
+        }
+      }
+      where {
+        select ?modelversie (f:uuid5(?refnaam) as ?bron) (f:uuid5(?parentnaam) as ?parent)
+               ?label (if(regex(?bronbestand,"^http","i"),iri(?bronbestand),?bronbestand) as ?link) ?refnaam
+        where {
+          select ?modelversie ?refnaam ?parentnaam ?label (if(bound(?bronbestandlink),?bronbestandlink,?bronbestandlabel) as ?bronbestand)
+          where {
+            graph <urn:input> {
+              ?row def:BRONNAAM ?label.
+              OPTIONAL {?row def:CITEERTITEL ?refnaam}
+              OPTIONAL {?row def:BRONLOCATIE ?bronbestandlabel}
+              OPTIONAL {?row def:BRONLOCATIE_hyperlink ?bronbestandlink}
+              OPTIONAL {
+                ?row def:ONDERDEEL_VAN ?parentnaam.
+                ?prow def:CITEERTITEL ?parentnaam.
+              }
+            }
+          }
+        }
+      }
+  - title: Bronverwijzingen aanmaken
+    query: >
+      prefix def: <urn:property:>
+      prefix csvw: <http://www.w3.org/ns/csvw#>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      prefix prov: <http://www.w3.org/ns/prov#>
+      prefix dct: <http://purl.org/dc/terms/>
+      prefix apf: <http://jena.apache.org/ARQ/property#>
+      insert {
+        graph <urn:bronverwijzingen> {
+          ?concept dct:source ?bronref
         }
       }
       where {
         graph <urn:input> {
-          ?table rdfs:label "Begrippen".
-          ?table csvw:row ?row.
-          ?row csvw:describes ?concept.
-          ?concept p:VOORKEURSTERM ?label
+          ?sheet rdfs:label "Begrippen"^^xsd:string.
+          ?sheet csvw:row/csvw:describes ?row.
+          ?row def:KENNISBRONNEN ?kennisbronnen.
+          ?bronref apf:strSplit(?kennisbronnen "\\sjo\\.|\\n|;")
+          FILTER (?bronref!="")
+        }
+        graph <urn:metadata> {
+          ?concept prov:wasDerivedFrom ?row
+        }
+      }
+  - title: Grondslag (dct:source) begrippen toevoegen, kennisbron is aanwezig
+    query: >
+      prefix dct: <http://purl.org/dc/terms/>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix f: <java:nl.architolk.rdf2rdf.>
+      delete {
+        graph <urn:bronverwijzingen> {
+          ?concept dct:source ?bronref
+        }
+      }
+      insert {
+        graph <urn:output> {
+          ?concept dct:source ?bron.
+          ?bron a dct:BibliographicResource.
+          ?bron rdfs:label ?bronref.
+          ?bron dct:isPartOf ?doc.
+          ?bron dct:title ?title.
+        }
+      }
+      where {
+        select distinct ?concept (f:uuid5(?bronref) as ?bron) ?doc ?bronref
+               (replace(strbefore(?bronref,?bronnaam),"^[\\s\\t]+|[\\s\\t]+$","") as ?title)
+
+        where {
+          graph <urn:bronverwijzingen> {
+            ?concept dct:source ?bronref
+          }
+          graph <urn:metadata> {
+            ?doc dct:identifier ?bronnaam
+          }
+          FILTER (strbefore(?bronref,?bronnaam)!="")
+        }
+      }
+  - title: Directe grondslag (dct:source) begrippen met aanwezige kennisbron toevoegen
+    query: >
+      prefix dct: <http://purl.org/dc/terms/>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix f: <java:nl.architolk.rdf2rdf.>
+      delete {
+        graph <urn:bronverwijzingen> {
+          ?concept dct:source ?bronref
+        }
+      }
+      insert {
+        graph <urn:output> {
+          ?concept dct:source ?bron.
+        }
+      }
+      where {
+        graph <urn:bronverwijzingen> {
+          ?concept dct:source ?bronref
+        }
+        graph <urn:metadata> {
+          ?bron dct:identifier ?bronnaam
+        }
+        FILTER (str(?bronref)=str(?bronnaam))
+      }
+  - title: Grondslag toevoegen bij ontbrekende kennisbron in tabblad Kennisbronnen
+    query: >
+      prefix dct: <http://purl.org/dc/terms/>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      insert {
+        graph <urn:output> {
+          ?concept dct:source [rdfs:label ?bronref]
+        }
+      }
+      where {
+        select distinct ?concept ?bronref
+        where {
+          graph <urn:bronverwijzingen> {
+            ?concept dct:source ?bronref
+          }
+        }
+      }
+  - title: Begrijpsverwijzingen aanmaken
+    query: >
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix apf: <http://jena.apache.org/ARQ/property#>
+      insert {
+        graph <urn:verwijzingen> {
+          ?concept skos:related ?refterm.
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?concept skos:definition ?definitie.
+          ?refterm apf:strSplit(?definitie "[^\\]]*\\[")
+          FILTER (?refterm!="")
+        }
+      }
+  - title: Trim verwijzingen
+    query: >
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      delete {
+        graph <urn:verwijzingen> {
+          ?concept skos:related ?term.
+        }
+      }
+      insert {
+        graph <urn:verwijzingen> {
+          ?concept skos:related ?trimmedterm.
+        }
+      }
+      where {
+        graph <urn:verwijzingen> {
+          select ?concept ?term (strbefore(?term,"]") as ?trimmedterm)
+          where {
+            ?concept skos:related ?term.
+          }
+        }
+      }
+  - title: Begripsverwijzing naar bovenliggend begrip aanmaken
+    query: >
+      prefix def: <urn:property:>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix csvw: <http://www.w3.org/ns/csvw#>
+      prefix prov: <http://www.w3.org/ns/prov#>
+      prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      insert {
+        graph <urn:verwijzingen> {
+          ?concept skos:broader ?bovenliggend
+        }
+      }
+      where {
+        graph <urn:input> {
+          ?sheet rdfs:label "Begrippen"^^xsd:string.
+          ?sheet csvw:row/csvw:describes ?row.
+          ?row def:BOVENLIGGEND_BEGRIP ?bovenliggend.
+        }
+        graph <urn:metadata> {
+          ?concept prov:wasDerivedFrom ?row
+        }
+      }
+  - title: Begripsverwijzingen aanmaken obv tabblad relaties
+    query: >
+      prefix def: <urn:property:>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix csvw: <http://www.w3.org/ns/csvw#>
+      prefix prov: <http://www.w3.org/ns/prov#>
+      prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      insert {
+        graph <urn:verwijzingen> {
+          ?concept ?rel ?naarterm
+        }
+      }
+      where {
+        graph <urn:input> {
+          ?relsheet rdfs:label "Relaties"^^xsd:string.
+          ?relsheet csvw:row/csvw:describes ?row.
+          ?row def:VAN_BEGRIP ?vanterm.
+          ?row def:NAAR_BEGRIP ?naarterm.
+          ?row def:RELATIE ?relterm.
+          ?vsheet rdfs:label "Begrippen"^^xsd:string.
+          ?vsheet csvw:row/csvw:describes ?vrow.
+          ?vrow def:VOORKEURSTERM ?vanterm.
+        }
+        graph <urn:relatietypen> {
+          ?rel rdfs:label ?relterm.
+        }
+        graph <urn:metadata> {
+          ?concept prov:wasDerivedFrom ?vrow
+        }
+      }
+  - title: Termvormen toevoegen
+    query: >
+      prefix def: <urn:property:>
+      prefix csvw: <http://www.w3.org/ns/csvw#>
+      prefix skosxl: <http://www.w3.org/2008/05/skos-xl#>
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      prefix f: <java:nl.architolk.rdf2rdf.>
+      insert {
+        graph <urn:output> {
+          ?singleterm a skosxl:Label.
+          ?pluralterm a skosxl:Label.
+          ?abbrevterm a skosxl:Label.
+          ?prevterm a skosxl:Label.
+          ?singleterm skosxl:literalForm ?single.
+          ?pluralterm skosxl:literalForm ?plural.
+          ?abbrevterm skosxl:literalForm ?abbrev.
+          ?prevterm skosxl:literalForm ?term.
+          ?prevterm skosxl:hiddenLabel ?singleterm.
+          ?prevterm skosxl:hiddenLabel ?pluralterm.
+          ?prevterm skosxl:hiddenLabel ?abbrevterm.
+        }
+      }
+      where {
+        select (f:uuid5(?term) as ?prevterm)
+               (if(strlen(?single)>0,f:uuid5(?single),?single) as ?singleterm)
+               (if(strlen(?plural)>0,f:uuid5(?plural),?plural) as ?pluralterm)
+               (if(strlen(?abbrev)>0,f:uuid5(?abbrev),?abbrev) as ?abbrevterm)
+               ?term ?single ?plural ?abbrev
+        where {
+          graph <urn:input> {
+            {
+              ?sheet rdfs:label "Termvormen"^^xsd:string.
+              ?sheet csvw:row/csvw:describes ?row.
+              ?row def:VOORKEURSTERM ?term.
+              OPTIONAL {?row def:MEERVOUD ?plural}
+              OPTIONAL {?row def:AFKORTING ?abbrev}
+              OPTIONAL {?row def:ENKELVOUD ?single}
+            }
+            UNION
+            {
+              ?sheet rdfs:label "Termvormen"^^xsd:string.
+              ?sheet csvw:row/csvw:describes ?row.
+              ?row def:ENKELVOUD ?term.
+              ?row def:ENKELVOUD ?single.
+              OPTIONAL {?row def:MEERVOUD ?plural}
+              OPTIONAL {?row def:AFKORTING ?abbrev}
+              FILTER NOT EXISTS {?row def:VOORKEURSTERM ?vterm}
+            }
+          }
+        }
+      }
+  - title: Overbodige skosxl:hiddenLabels weghalen (hiddenLabel to self)
+    query: >
+      prefix skosxl: <http://www.w3.org/2008/05/skos-xl#>
+      delete {
+        graph <urn:output> {
+          ?term skosxl:hiddenLabel ?term
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?term skosxl:hiddenLabel ?term
+        }
+      }
+  - title: Hidden labels toevoegen aan begrippen op basis van termvormen
+    query: >
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix skosxl: <http://www.w3.org/2008/05/skos-xl#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      insert {
+        graph <urn:output> {
+          ?concept skos:hiddenLabel ?hiddenlabel
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?concept a skos:Concept.
+          ?concept rdfs:label ?voorkeursterm.
+          ?termxl skosxl:literalForm ?term.
+          ?termxl skosxl:hiddenLabel/skosxl:literalForm ?hiddenlabel
+          FILTER(lcase(str(?voorkeursterm))=lcase(str(?term)))
+        }
+      }
+  - title: Begrijpsverwijzingen aanleggen (binnen eigen model), verwijder als aangemaakt
+    query: >
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      delete {
+        graph <urn:verwijzingen> {
+          ?concept ?relation ?refterm
+        }
+      }
+      insert {
+        graph <urn:output> {
+          ?concept ?relation ?refconcept.
+        }
+      }
+      where {
+        graph <urn:verwijzingen> {
+          ?concept ?relation ?refterm
+        }
+        graph <urn:output> {
+          ?refconcept (rdfs:label|skos:hiddenLabel) ?term
+        }
+        FILTER (lcase(str(?term))=lcase(?refterm))
+      }
+  - title: Begrijpsverwijzingen aanleggen (buiten eigen model), verwijder als aangemaakt
+    query: >
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix prov: <http://www.w3.org/ns/prov#>
+      prefix f: <java:nl.architolk.rdf2rdf.>
+      delete {
+        graph <urn:verwijzingen> {
+          ?concept ?relation ?refterm
+        }
+      }
+      insert {
+        graph <urn:output> {
+          ?concept ?relation ?relconcept.
+          ?relconcept a skos:Concept.
+          ?relconcept rdfs:label ?term.
+          ?modelversie prov:wasInfluencedBy ?kennisgebied.
+        }
+      }
+      where {
+        select distinct ?modelversie ?concept ?relation (f:uuid5(?refterm) as ?relconcept) ?kennisgebied (strafter(?refterm,".") as ?term) ?refterm
+        where {
+          graph <urn:verwijzingen> {
+            ?concept ?relation ?refterm.
+          }
+          graph <urn:metadata> {
+            ?modelversie a prov:Entity
+          }
+          FILTER(strbefore(?refterm,".")=str(?kgcode))
+        }
+      }
+  - title: Begrijpsverwijzingen (ontbrekende)
+    query: >
+      prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      insert {
+        graph <urn:output> {
+          ?concept ?relation [rdfs:label ?refterm].
+        }
+      }
+      where {
+        {
+          select distinct ?concept ?relation ?refterm
+          where {
+            graph <urn:verwijzingen> {
+              ?concept ?relation ?refterm
+            }
+          }
+        }
+        FILTER (?refterm!="")
+      }
+  - title: Overbodige skos:related weghalen
+    query: >
+      prefix skos: <http://www.w3.org/2004/02/skos/core#>
+      delete {
+        graph <urn:output> {
+          ?concept skos:related ?relconcept
+        }
+      }
+      where {
+        graph <urn:output> {
+          ?concept skos:related ?relconcept.
+          ?concept ?relation ?relconcept.
+          FILTER (?relation!=skos:related)
         }
       }
