@@ -7,6 +7,7 @@ prefixes:
   prov: http://www.w3.org/ns/prov#
   dcat: http://www.w3.org/ns/dcat#
   dct: http://purl.org/dc/terms/
+  rdf: http://www.w3.org/1999/02/22-rdf-syntax-ns#
 queries:
   - title: Begripsrelaties opnemen in named graph
     query: >
@@ -550,30 +551,43 @@ queries:
       prefix def: <urn:property:>
       prefix skos: <http://www.w3.org/2004/02/skos/core#>
       prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
       prefix csvw: <http://www.w3.org/ns/csvw#>
       prefix prov: <http://www.w3.org/ns/prov#>
       prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+      prefix f: <java:nl.architolk.rdf2rdf.>
       insert {
         graph <urn:verwijzingen> {
-          ?concept ?rel ?naarterm
+          ?concept ?rel ?naarterm.
+        }
+        graph <urn:verwijzingen-statement> {
+          ?statement rdf:subject ?concept.
+          ?statement rdf:predicate ?rel.
+          ?statement rdf:object ?naarterm.
+          ?statement rdfs:label ?label
         }
       }
       where {
-        graph <urn:input> {
-          ?relsheet rdfs:label "Relaties"^^xsd:string.
-          ?relsheet csvw:row/csvw:describes ?row.
-          ?row def:VAN_BEGRIP ?vanterm.
-          ?row def:NAAR_BEGRIP ?naarterm.
-          ?row def:RELATIE ?relterm.
-          ?vsheet rdfs:label "Begrippen"^^xsd:string.
-          ?vsheet csvw:row/csvw:describes ?vrow.
-          ?vrow def:VOORKEURSTERM ?vanterm.
-        }
-        graph <urn:relatietypen> {
-          ?rel rdfs:label ?relterm.
-        }
-        graph <urn:metadata> {
-          ?concept prov:wasDerivedFrom ?vrow
+        select ?concept ?rel ?naarterm (f:uuid5(concat(?nsp,?vanterm,'-',?relterm,'-',?naarterm)) as ?statement) ?label
+        where {
+          graph <urn:input> {
+            ?relsheet rdfs:label "Relaties"^^xsd:string.
+            ?relsheet csvw:row/csvw:describes ?row.
+            ?row def:VAN_BEGRIP ?vanterm.
+            ?row def:NAAR_BEGRIP ?naarterm.
+            ?row def:RELATIE ?relterm.
+            ?vsheet rdfs:label "Begrippen"^^xsd:string.
+            ?vsheet csvw:row/csvw:describes ?vrow.
+            ?vrow def:VOORKEURSTERM ?vanterm.
+            OPTIONAL { ?row def:VERWOORDING ?label }
+          }
+          graph <urn:relatietypen> {
+            ?rel rdfs:label ?relterm.
+          }
+          graph <urn:metadata> {
+            ?m skos:notation ?nsp.
+            ?concept prov:wasDerivedFrom ?vrow
+          }
         }
       }
   - title: Termvormen toevoegen
@@ -665,14 +679,19 @@ queries:
     query: >
       prefix skos: <http://www.w3.org/2004/02/skos/core#>
       prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
       delete {
         graph <urn:verwijzingen> {
-          ?concept ?relation ?refterm
+          ?concept ?relation ?refterm.
         }
       }
       insert {
         graph <urn:output> {
           ?concept ?relation ?refconcept.
+          ?statement rdf:subject ?concept.
+          ?statement rdf:predicate ?relation.
+          ?statement rdf:object ?refconcept.
+          ?statement rdfs:label ?label
         }
       }
       where {
@@ -681,6 +700,14 @@ queries:
         }
         graph <urn:output> {
           ?refconcept (rdfs:label|skos:hiddenLabel) ?term
+        }
+        OPTIONAL {
+          graph <urn:verwijzingen-statement> {
+            ?statement rdf:subject ?concept.
+            ?statement rdf:predicate ?relation.
+            ?statement rdf:object ?refterm.
+            ?statement rdfs:label ?label
+          }
         }
         FILTER (lcase(str(?term))=lcase(?refterm))
       }
