@@ -23,6 +23,7 @@ queries:
           skosthes:broaderInstantial rdfs:label "is exemplaar van".
           skos:related rdfs:label "is gerelateerd aan".
           skos:related rdfs:label "is eigenschap van".
+          skos:related rdfs:label "heeft eigenschap".
         }
       }
       where {}
